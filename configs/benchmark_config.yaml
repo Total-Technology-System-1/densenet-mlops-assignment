@@ -1,0 +1,38 @@
+# DenseNet MLOps Assignment Configuration - Day 2
+
+benchmark:
+  batch_sizes: [1, 4, 8, 16, 32]
+  num_iterations: 50
+  warmup_iterations: 10
+  device: auto  # auto, cpu, cuda
+
+model:
+  architecture: densenet121
+  pretrained: true
+  num_classes: 1000
+  input_size: [3, 224, 224]
+
+optimization:
+  techniques: [quantization, pruning, onnx]
+  
+  quantization:
+    backend: fbgemm  # fbgemm for CPU, qnnpack for mobile
+    reduce_range: false
+    
+  pruning:
+    amount: 0.3  # 30% sparsity
+    structured: false
+    
+  distillation:
+    temperature: 4.0
+    alpha: 0.7
+    
+  onnx:
+    opset_version: 11
+    optimize: true
+
+output:
+  results_dir: ./results
+  logs_dir: ./logs
+  tensorboard_dir: ./logs/tensorboard
+  export_formats: [csv, json]

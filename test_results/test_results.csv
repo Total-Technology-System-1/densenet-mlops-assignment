@@ -1,0 +1,6 @@
+model_variant,batch_size,device,ram_usage_mb,vram_usage_mb,cpu_utilization_pct,gpu_utilization_pct,latency_ms,throughput_samples_sec,accuracy_top1,accuracy_top5,model_size_mb,optimization_technique
+densenet121_baseline,1,cpu,0,0,0,0,0,0,,,30.436920166015625,baseline
+densenet121_baseline,4,cpu,0,0,0,0,0,0,,,30.436920166015625,baseline
+densenet121_baseline,8,cpu,0,0,0,0,0,0,,,30.436920166015625,baseline
+densenet121_baseline,16,cpu,0,0,0,0,0,0,,,30.436920166015625,baseline
+densenet121_baseline,32,cpu,0,0,0,0,0,0,,,30.436920166015625,baseline
