@@ -148,7 +148,7 @@ class PyTorchProfilerWrapper:
         if self.profiler and self.is_profiling:
             self.profiler.step()
     
-    def export_traces(
+    def export_chrome_trace(
         self, 
         filename_prefix: str = "profile",
         export_chrome_trace: bool = True,

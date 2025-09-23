@@ -23,8 +23,11 @@ from models.densenet_base import DenseNetBase
 from benchmarking.profiler import PyTorchProfilerWrapper
 from benchmarking.metrics_collector import MetricsCollector
 from benchmarking.tensorboard_logger import TensorBoardLogger
+from optimization.optimization_manager import OptimizationManager
 from utils.device_utils import detect_environment, get_memory_info
 from utils.logger import setup_logger
+
+
 
 
 class BenchmarkRunner:
@@ -254,9 +257,148 @@ class BenchmarkRunner:
             'accuracy_top1': None,
             'accuracy_top5': None
         }
+    def run_optimization_benchmarks(self) -> List[Dict[str, Any]]:
+        """
+        Run benchmarking across all optimization techniques.
+        
+        Returns:
+            List of benchmark results for all optimizations
+        """
+        self.logger.info("🔧 Starting Optimization Benchmarking Suite")
+        
+        # Initialize optimization manager
+        opt_manager = OptimizationManager(device=str(self.device), config=self.config)
+        
+        # Get optimization techniques from config
+        techniques = self.config.get('optimization', {}).get('techniques', 
+                                                           ['quantization_dynamic', 'pruning_unstructured'])
+        
+        self.logger.info(f"   Testing {len(techniques)} optimization techniques")
+        
+        # Load base model for optimizations
+        base_model = DenseNetBase(device=str(self.device))
+        
+        optimization_results = []
+        
+        for technique in techniques:
+            self.logger.info(f"🔍 Benchmarking optimization: {technique}")
+            
+            try:
+                # Apply optimization
+                optimized_model = None
+                opt_info = {}
+                
+                if technique.startswith('quantization_'):
+                    quant_type = technique.split('_')[1]
+                    optimized_model, opt_info = opt_manager.apply_quantization(base_model.model, quant_type)
+                    
+                elif technique.startswith('pruning_'):
+                    prune_type = technique.split('_')[1]
+                    optimized_model, opt_info = opt_manager.apply_pruning(base_model.model, prune_type)
+                    
+                else:
+                    self.logger.warning(f"   Unknown technique: {technique}")
+                    continue
+                
+                # Benchmark this optimization across batch sizes
+                if optimized_model is not None and opt_info.get('success', False):
+                    
+                    for batch_size in [1, 4, 8]:  # Test subset for now
+                        try:
+                            self.logger.info(f"   Testing batch size: {batch_size}")
+                            
+                            # Create test input
+                            test_input = torch.randn(batch_size, 3, 224, 224, device=self.device)
+                            
+                            # Warmup
+                            optimized_model = optimized_model.to(self.device)
+                            optimized_model.eval()
+                            with torch.no_grad():
+                                for _ in range(5):
+                                    _ = optimized_model(test_input)
+                            
+                            # Benchmark
+                            latencies = []
+                            with torch.no_grad():
+                                for _ in range(20):  # Fewer iterations for testing
+                                    if self.device.type == 'cuda':
+                                        torch.cuda.synchronize()
+                                    
+                                    start_time = time.perf_counter()
+                                    _ = optimized_model(test_input)
+                                    
+                                    if self.device.type == 'cuda':
+                                        torch.cuda.synchronize()
+                                    
+                                    latencies.append((time.perf_counter() - start_time) * 1000)
+                            
+                            # Calculate metrics
+                            mean_latency = sum(latencies) / len(latencies)
+                            throughput = batch_size * 1000 / mean_latency
+                            
+                            # Get memory info
+                            memory_info = get_memory_info()
+                            
+                            # Create result
+                            result = {
+                                'model_variant': f'densenet121_{technique}',
+                                'batch_size': batch_size,
+                                'device': str(self.device),
+                                'optimization_technique': technique,
+                                'mean_latency_ms': round(mean_latency, 3),
+                                'throughput_samples_sec': round(throughput, 2),
+                                'model_size_mb': opt_info.get('model_size_mb', 0),
+                                'ram_usage_mb': memory_info.get('process_ram_mb', 0),
+                                'vram_usage_mb': memory_info.get('gpu_allocated_mb', 0),
+                                'cpu_utilization_pct': memory_info.get('cpu_percent', 0),
+                                'gpu_utilization_pct': 0,  # Placeholder
+                                'accuracy_top1': None,  # Placeholder
+                                'accuracy_top5': None,  # Placeholder
+                                'iterations': len(latencies),
+                                'timestamp': datetime.now().isoformat()
+                            }
+                            
+                            # Add optimization-specific metrics
+                            if 'size_reduction_percent' in opt_info:
+                                result['size_reduction_percent'] = opt_info['size_reduction_percent']
+                            if 'speedup_ratio' in opt_info:
+                                result['speedup_ratio'] = opt_info['speedup_ratio']
+                            if 'sparsity_percent' in opt_info:
+                                result['sparsity_percent'] = opt_info['sparsity_percent']
+                            
+                            optimization_results.append(result)
+                            
+                            # Log to TensorBoard
+                            self._log_to_tensorboard(result, technique)
+                            
+                            self.logger.info(f"     ✅ Batch {batch_size}: {mean_latency:.3f}ms, {throughput:.1f} samples/sec")
+                            
+                        except Exception as e:
+                            self.logger.error(f"     ❌ Failed batch {batch_size}: {e}")
+                            # Create error result
+                            error_result = {
+                                'model_variant': f'densenet121_{technique}',
+                                'batch_size': batch_size,
+                                'device': str(self.device),
+                                'optimization_technique': technique,
+                                'error': str(e),
+                                'timestamp': datetime.now().isoformat()
+                            }
+                            optimization_results.append(error_result)
+                else:
+                    self.logger.error(f"   ❌ Optimization failed: {opt_info.get('error', 'Unknown error')}")
+                
+                self.logger.info(f"   ✅ Completed {technique}")
+                
+            except Exception as e:
+                self.logger.error(f"   ❌ Failed to benchmark {technique}: {e}")
+        
+        self.logger.info(f"🔧 Optimization benchmarking complete: {len(optimization_results)} results")
+        return optimization_results
+        
         
         # Save detailed profiling results
-        self._save_profiler_results(prof, batch_size, optimization_technique)
+    # self._save_profiler_results(prof, batch_size, optimization_technique)
         
         return result
     
@@ -364,13 +506,16 @@ class BenchmarkRunner:
             baseline_results = self.run_baseline_benchmark()
             all_results.extend(baseline_results)
             
-            # TODO: Day 5-6 will add optimization benchmarks here
-            # For now, we only have baseline
+            # Run optimization benchmarking (NEW)
+            optimization_results = self.run_optimization_benchmarks()
+            all_results.extend(optimization_results)
             
             # Store results
             self.all_results = all_results
             
             self.logger.info(f"🎉 Benchmarking suite completed!")
+            self.logger.info(f"   Baseline results: {len(baseline_results)}")
+            self.logger.info(f"   Optimization results: {len(optimization_results)}")
             self.logger.info(f"   Total results: {len(all_results)}")
             
             return all_results
