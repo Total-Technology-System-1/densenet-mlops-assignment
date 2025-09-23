@@ -1,7 +1,0 @@
-model_variant,batch_size,device,ram_usage_mb,vram_usage_mb,cpu_utilization_pct,gpu_utilization_pct,latency_ms,throughput_samples_sec,accuracy_top1,accuracy_top5,model_size_mb,optimization_technique
-densenet121_baseline,1,cpu,561.38,0,49.4,0,95.032,10.52,,,30.44,baseline
-densenet121_baseline,4,cpu,612.82,0,62.6,0,340.9,11.73,,,30.44,baseline
-densenet121_quantization_dynamic,1,cpu,631.73,0,58.2,0,90.689,11.03,,,26.53,quantization_dynamic
-densenet121_quantization_dynamic,4,cpu,691.21,0,60.5,0,328.777,12.17,,,26.53,quantization_dynamic
-densenet121_pruning_unstructured,1,cpu,878.9,0,58.1,0,97.78,10.23,,,30.44,pruning_unstructured
-densenet121_pruning_unstructured,4,cpu,877.36,0,58.2,0,336.749,11.88,,,30.44,pruning_unstructured
